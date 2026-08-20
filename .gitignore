@@ -1,0 +1,7 @@
+bin/
+obj/
+publish/
+.vs/
+*.user
+*.suo
+clip_patcher_files_backups_logs/

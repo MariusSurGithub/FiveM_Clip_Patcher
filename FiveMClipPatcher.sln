@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{C53CEEDE-5640-4813-92F0-227DB3697474}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FiveMClipPatcher", "src\FiveMClipPatcher\FiveMClipPatcher.csproj", "{5030E5AD-ADD7-4F0B-AA28-01D7F494B3E8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FiveMClipPatcher.Tests", "src\FiveMClipPatcher.Tests\FiveMClipPatcher.Tests.csproj", "{EB6752B2-165E-459E-8542-82AE1BB45272}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{5030E5AD-ADD7-4F0B-AA28-01D7F494B3E8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5030E5AD-ADD7-4F0B-AA28-01D7F494B3E8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5030E5AD-ADD7-4F0B-AA28-01D7F494B3E8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5030E5AD-ADD7-4F0B-AA28-01D7F494B3E8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EB6752B2-165E-459E-8542-82AE1BB45272}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EB6752B2-165E-459E-8542-82AE1BB45272}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EB6752B2-165E-459E-8542-82AE1BB45272}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EB6752B2-165E-459E-8542-82AE1BB45272}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{5030E5AD-ADD7-4F0B-AA28-01D7F494B3E8} = {C53CEEDE-5640-4813-92F0-227DB3697474}
+		{EB6752B2-165E-459E-8542-82AE1BB45272} = {C53CEEDE-5640-4813-92F0-227DB3697474}
+	EndGlobalSection
+EndGlobal
