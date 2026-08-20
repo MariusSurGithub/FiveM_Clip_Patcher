@@ -6,10 +6,12 @@ namespace FiveMClipPatcher.Services;
 
 public sealed class ClipPatternDiscoveryService
 {
-    private const int MinRunLength = 4;
+    private const int MinRunLength = 6;
     private const int MaxRunLength = 64;
-    private const int MinClipCountExact = 2;
-    private const int MinVariantsForWildcard = 3;
+    private const int MinClipCountExact = 3;
+    private const int MinVariantsForWildcard = 4;
+    private const int MinWildcardPrefixLength = PatternSafetyService.MinWildcardPrefixLength;
+    private const int MaxSuggestions = 25;
 
     private static readonly HashSet<string> Blacklist = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -89,16 +91,24 @@ public sealed class ClipPatternDiscoveryService
         var consumed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         var prefixGroups = globalCounts.Keys
-            .Where(k => k.Contains('_') || k.Contains('-'))
-            .GroupBy(GetPrefix, StringComparer.OrdinalIgnoreCase)
+            .Where(k => k.Contains('_'))
+            .Select(k => (Name: k, Prefix: GetPrefix(k)))
+            .Where(x => x.Prefix.Length >= MinWildcardPrefixLength)
+            .GroupBy(x => x.Prefix, StringComparer.OrdinalIgnoreCase)
             .Where(g => g.Count() >= MinVariantsForWildcard)
-            .OrderByDescending(g => g.Sum(name => globalCounts[name]))
+            .OrderByDescending(g => g.Sum(x => globalCounts[x.Name]))
             .ToList();
 
         foreach (var group in prefixGroups)
         {
+            if (!PatternSafetyService.IsValidResourcePrefixForWildcard(group.Key))
+                continue;
+
             var wildcard = $"{group.Key}_*";
             if (existing.Contains(NormalizePatternKey(wildcard)) || consumed.Contains(wildcard))
+                continue;
+
+            if (!PatternSafetyService.IsSafePattern(wildcard))
                 continue;
 
             var clipCount = CountClipsWithPrefix(perClipRuns, group.Key);
@@ -108,8 +118,8 @@ public sealed class ClipPatternDiscoveryService
             suggestions.Add(new SuggestedPattern(wildcard, clipCount, $"{group.Count()} variantes"));
             consumed.Add(wildcard);
 
-            foreach (var name in group)
-                consumed.Add(name);
+            foreach (var entry in group)
+                consumed.Add(entry.Name);
         }
 
         foreach (var (name, clipCount) in globalCounts.OrderByDescending(kv => kv.Value))
@@ -125,9 +135,10 @@ public sealed class ClipPatternDiscoveryService
         }
 
         return suggestions
+            .Where(s => PatternSafetyService.IsSafePattern(s.Pattern))
             .OrderByDescending(s => s.ClipCount)
             .ThenBy(s => s.Pattern, StringComparer.OrdinalIgnoreCase)
-            .Take(50)
+            .Take(MaxSuggestions)
             .ToList();
     }
 
@@ -160,26 +171,38 @@ public sealed class ClipPatternDiscoveryService
         if (!ResourceLike.IsMatch(run))
             return false;
 
-        return run.Any(char.IsLetter);
-    }
-
-    private static int CountClipsWithPrefix(Dictionary<string, HashSet<string>> perClipRuns, string prefix)
-    {
-        var count = 0;
-        foreach (var runs in perClipRuns.Values)
+        if (run.Contains('_'))
         {
-            if (runs.Any(r => r.StartsWith(prefix + "_", StringComparison.OrdinalIgnoreCase)
-                              || r.StartsWith(prefix + "-", StringComparison.OrdinalIgnoreCase)))
-                count++;
+            var prefix = run[..run.IndexOf('_')];
+            if (prefix.Length < MinWildcardPrefixLength)
+                return false;
+        }
+        else if (run.Contains('-') && run.Length < 10)
+        {
+            return false;
         }
 
-        return count;
+        return run.Any(char.IsLetter);
     }
 
     private static string GetPrefix(string name)
     {
         var idx = name.IndexOf('_');
-        return idx > 0 ? name[..idx] : name;
+        if (idx <= 0)
+            return string.Empty;
+
+        return name[..idx];
+    }
+    private static int CountClipsWithPrefix(Dictionary<string, HashSet<string>> perClipRuns, string prefix)
+    {
+        var count = 0;
+        foreach (var runs in perClipRuns.Values)
+        {
+            if (runs.Any(r => r.StartsWith(prefix + "_", StringComparison.OrdinalIgnoreCase)))
+                count++;
+        }
+
+        return count;
     }
 
     private static HashSet<string> BuildExistingPatternSet(IReadOnlyList<string> patterns)

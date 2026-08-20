@@ -32,6 +32,8 @@ Trois catégories sont préchargées dans l'onglet **Patterns** :
 
 Le crash dépend surtout des ressources **de ton serveur**. Utilise **Détecter** pour analyser tes `.clip` et ajouter automatiquement les noms de ressources les plus fréquents (section `# Suggérés depuis tes clips`).
 
+Les wildcards trop courts (`j_*`, `cfx_*`, `pd_*`, …) peuvent **casser** le clip en patchant des données internes. Utilise **Nettoyer** pour les retirer. Si un clip ne s'ouvre plus : restaure depuis le dossier backup (`Ouvrir backups`).
+
 Pour un crash persistant, ouvre le log FiveM et cherche `during loading of <nom_ressource>` — ajoute ce nom en pattern **exact**.
 
 ## Build

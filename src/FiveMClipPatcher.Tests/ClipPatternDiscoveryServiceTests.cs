@@ -40,7 +40,7 @@ public class ClipPatternDiscoveryServiceTests
 
         File.WriteAllBytes(clip1, Payload("griz_cayo_restaurant", "17mov_alpha"));
         File.WriteAllBytes(clip2, Payload("griz_cayo_restaurant", "17mov_beta"));
-        File.WriteAllBytes(clip3, Payload("17mov_gamma", "17mov_delta"));
+        File.WriteAllBytes(clip3, Payload("griz_cayo_restaurant", "17mov_gamma", "17mov_delta"));
 
         var suggestions = new ClipPatternDiscoveryService().DiscoverFromClips(
             [clip1, clip2, clip3],
@@ -49,7 +49,43 @@ public class ClipPatternDiscoveryServiceTests
             CancellationToken.None);
 
         Assert.Contains(suggestions, s => s.Pattern == "griz_cayo_restaurant");
+        Assert.DoesNotContain(suggestions, s => s.Pattern is "j_*" or "cfx_*" or "pd_*");
         Assert.DoesNotContain(suggestions, s => s.Pattern.StartsWith("17mov", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void PatternSafety_rejects_short_wildcards()
+    {
+        Assert.False(PatternSafetyService.IsSafePattern("j_*"));
+        Assert.False(PatternSafetyService.IsSafePattern("cfx_*"));
+        Assert.False(PatternSafetyService.IsSafePattern("pd_*"));
+        Assert.True(PatternSafetyService.IsSafePattern("17mov_*"));
+        Assert.True(PatternSafetyService.IsSafePattern("*_emotemenu"));
+        Assert.True(PatternSafetyService.IsSafePattern("prompt_*"));
+    }
+
+    [Fact]
+    public void RemoveUnsafePatternLines_strips_dangerous_entries()
+    {
+        const string text = """
+            17mov_*
+            j_*
+            griz_cayo_restaurant
+            cfx_*
+            """;
+
+        var cleaned = PatternSafetyService.RemoveUnsafePatternLines(text);
+        Assert.Contains("17mov_*", cleaned);
+        Assert.Contains("griz_cayo_restaurant", cleaned);
+        Assert.DoesNotContain("j_*", cleaned);
+        Assert.DoesNotContain("cfx_*", cleaned);
+    }
+
+    [Fact]
+    public void LooksLikeResourceName_rejects_short_prefix_runs()
+    {
+        Assert.False(ClipPatternDiscoveryService.LooksLikeResourceName("j_test"));
+        Assert.False(ClipPatternDiscoveryService.LooksLikeResourceName("pd_props"));
     }
 
     [Fact]
@@ -84,6 +120,7 @@ public class ClipPatternDiscoveryServiceTests
             progress: null,
             CancellationToken.None);
 
+        Assert.All(suggestions, s => Assert.True(PatternSafetyService.IsSafePattern(s.Pattern)));
         Assert.True(suggestions.Count >= 0);
     }
 

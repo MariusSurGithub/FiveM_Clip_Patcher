@@ -214,6 +214,17 @@ public partial class MainViewModel : ObservableObject
         StatusText = "Patterns par défaut restaurés.";
     }
 
+    [RelayCommand]
+    private void CleanPatterns()
+    {
+        var before = ParsePatterns(PatternsText).Count;
+        PatternsText = PatternSafetyService.RemoveUnsafePatternLines(PatternsText);
+        var removed = before - ParsePatterns(PatternsText).Count;
+        StatusText = removed == 0
+            ? "Aucun pattern dangereux trouvé."
+            : $"{removed} pattern(s) dangereux retirés (ex: j_*, cfx_*). Utilise les backups si un clip est déjà cassé.";
+    }
+
     [RelayCommand(CanExecute = nameof(CanDiscoverPatterns), AllowConcurrentExecutions = false)]
     private Task DiscoverPatternsAsync() => RunPatternDiscoveryAsync();
 
@@ -436,6 +447,7 @@ public partial class MainViewModel : ObservableObject
         var existing = ParsePatterns(current).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var toAdd = suggestions
             .Where(s => !existing.Contains(s.Pattern))
+            .Where(s => PatternSafetyService.IsSafePattern(s.Pattern))
             .ToList();
 
         if (toAdd.Count == 0)
@@ -540,9 +552,15 @@ public partial class MainViewModel : ObservableObject
 
             if (confirmWrite)
             {
+                var unsafeLeft = PatternSafetyService.GetUnsafePatterns(ParsePatterns(PatternsText));
+                var extraWarn = unsafeLeft.Count > 0
+                    ? $"\n\n⚠ {unsafeLeft.Count} pattern(s) dangereux seront IGNORÉS (j_*, cfx_*, etc.)."
+                    : "";
+
                 var confirm = MessageBox.Show(
                     $"{preview.FilesPatched} séquence(s) seront patchées ({preview.PatternsPatched} remplacement(s)).\n\n" +
-                    "Backup auto, remplacement in-place (même taille).\nFerme GTA / FiveM avant.\n\nContinuer ?",
+                    "Backup auto, remplacement in-place (même taille).\nFerme GTA / FiveM avant.\n\nContinuer ?" +
+                    extraWarn,
                     "FiveM Clip Patcher",
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Warning,
@@ -602,10 +620,21 @@ public partial class MainViewModel : ObservableObject
 
     private PatchOptions? TryBuildOptions(bool dryRun, IReadOnlyList<string> selectedFiles)
     {
-        var patterns = ParsePatterns(PatternsText);
+        var allPatterns = ParsePatterns(PatternsText);
+        var unsafePatterns = PatternSafetyService.GetUnsafePatterns(allPatterns);
+        var patterns = PatternSafetyService.FilterSafePatterns(allPatterns);
+
+        if (unsafePatterns.Count > 0)
+        {
+            AppendLog($"Patterns dangereux ignorés ({unsafePatterns.Count}) : {string.Join(", ", unsafePatterns.Take(8))}" +
+                      (unsafePatterns.Count > 8 ? "…" : ""));
+        }
+
         if (patterns.Count == 0)
         {
-            StatusText = "Ajoute au moins un pattern (ex: 17mov_*).";
+            StatusText = unsafePatterns.Count > 0
+                ? "Tous les patterns sont dangereux — clique Nettoyer ou corrige la liste."
+                : "Ajoute au moins un pattern (ex: 17mov_*).";
             return null;
         }
 

@@ -232,6 +232,11 @@
                                 <TextBlock Style="{StaticResource MutedText}" FontSize="11" TextWrapping="Wrap"
                                            Text="Un pattern par ligne. Exact = substring. Wildcard (*) = nom isolé."/>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0">
+                                    <Button Content="Nettoyer"
+                                            Style="{StaticResource GhostButton}"
+                                            Margin="0,0,6,0"
+                                            ToolTip="Retirer les wildcards trop larges (j_*, cfx_*, …)"
+                                            Command="{Binding CleanPatternsCommand}"/>
                                     <Button Content="Détecter"
                                             Style="{StaticResource GhostButton}"
                                             Margin="0,0,6,0"
