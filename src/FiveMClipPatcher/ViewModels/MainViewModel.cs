@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Text;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -14,21 +15,39 @@ namespace FiveMClipPatcher.ViewModels;
 public partial class MainViewModel : ObservableObject
 {
     public const string DefaultPatterns = """
-        # Mods courants qui font crasher Rockstar Editor (README GitHub)
+        # Mods courants (README GitHub)
         17mov_GarbageCollector
         17mov_*
         scully_emotemenu
         scully_*
+        *_emotemenu
         bzzz_food_*
+        bzzz_*
         pprp_*
+
+        # MLO / escrow — crashs documentés
+        griz_cayo_restaurant
+        amb-roxwood-interiors
+        prompt_vfd_4bays
+
+        # Créateurs MLO / maps (escrow ITYP fréquent)
+        prompt_*
+        gabz_*
+        kiiya_*
+        k4mb1_*
+        molo_*
+
         # Ajoute tes mods ici (exact = substring, * = nom isolé)
         """;
 
     private readonly ClipPatcherService _patcher = new();
     private readonly ClipCatalogService _catalog = new();
     private readonly ClipThumbnailService _thumbnails = new();
+    private readonly ClipPatternDiscoveryService _discovery = new();
+    private AppSettings _settings = AppSettingsStore.Load();
     private CancellationTokenSource? _cts;
     private CancellationTokenSource? _loadCts;
+    private CancellationTokenSource? _discoverCts;
 
     public ObservableCollection<ClipItemViewModel> Clips { get; } = [];
 
@@ -56,6 +75,8 @@ public partial class MainViewModel : ObservableObject
 
     public bool CanRunActions => SelectedCount > 0 && !IsBusy && !IsLoadingClips;
 
+    public bool CanDiscoverPatterns => Clips.Count > 0 && !IsBusy && !IsLoadingClips;
+
     public MainViewModel()
     {
         try
@@ -82,15 +103,19 @@ public partial class MainViewModel : ObservableObject
     partial void OnIsBusyChanged(bool value)
     {
         OnPropertyChanged(nameof(CanRunActions));
+        OnPropertyChanged(nameof(CanDiscoverPatterns));
         ScanCommand.NotifyCanExecuteChanged();
         PatchCommand.NotifyCanExecuteChanged();
+        DiscoverPatternsCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnIsLoadingClipsChanged(bool value)
     {
         OnPropertyChanged(nameof(CanRunActions));
+        OnPropertyChanged(nameof(CanDiscoverPatterns));
         ScanCommand.NotifyCanExecuteChanged();
         PatchCommand.NotifyCanExecuteChanged();
+        DiscoverPatternsCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnClipsPathChanged(string value) => _ = LoadClipsAsync();
@@ -188,6 +213,9 @@ public partial class MainViewModel : ObservableObject
         PatternsText = DefaultPatterns;
         StatusText = "Patterns par défaut restaurés.";
     }
+
+    [RelayCommand(CanExecute = nameof(CanDiscoverPatterns), AllowConcurrentExecutions = false)]
+    private Task DiscoverPatternsAsync() => RunPatternDiscoveryAsync();
 
     [RelayCommand]
     private void OpenClipsFolder()
@@ -306,6 +334,7 @@ public partial class MainViewModel : ObservableObject
                 : $"{Clips.Count} séquence(s) — coche celles à traiter.";
 
             _ = LoadThumbnailsAsync(token);
+            _ = MaybePromptPatternDiscoveryAsync();
         }
         catch (OperationCanceledException)
         {
@@ -318,7 +347,108 @@ public partial class MainViewModel : ObservableObject
         finally
         {
             IsLoadingClips = false;
+            OnPropertyChanged(nameof(CanDiscoverPatterns));
+            DiscoverPatternsCommand.NotifyCanExecuteChanged();
         }
+    }
+
+    private async Task MaybePromptPatternDiscoveryAsync()
+    {
+        if (_settings.DiscoveryPromptShown || Clips.Count == 0)
+            return;
+
+        if (!string.Equals(PatternsText.Trim(), DefaultPatterns.Trim(), StringComparison.Ordinal))
+            return;
+
+        _settings.DiscoveryPromptShown = true;
+        AppSettingsStore.Save(_settings);
+
+        var answer = MessageBox.Show(
+            "Scanner tes clips pour suggérer des patterns anti-crash supplémentaires ?\n\n" +
+            "Analyse les noms de ressources présents dans tes .clip (peut prendre 1–2 min).",
+            "FiveM Clip Patcher",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question,
+            MessageBoxResult.Yes);
+
+        if (answer == MessageBoxResult.Yes)
+            await RunPatternDiscoveryAsync();
+    }
+
+    private async Task RunPatternDiscoveryAsync()
+    {
+        if (Clips.Count == 0)
+        {
+            StatusText = "Aucun clip à analyser.";
+            return;
+        }
+
+        _discoverCts?.Cancel();
+        _discoverCts?.Dispose();
+        _discoverCts = new CancellationTokenSource();
+        var token = _discoverCts.Token;
+
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        StatusText = "Analyse des clips pour suggérer des patterns…";
+
+        try
+        {
+            var clipPaths = Clips.Select(c => c.FilePath).ToList();
+            var existing = ParsePatterns(PatternsText);
+
+            var suggestions = await Task.Run(() =>
+                _discovery.DiscoverFromClips(
+                    clipPaths,
+                    existing,
+                    new Progress<string>(line => StatusText = line),
+                    token), token);
+
+            token.ThrowIfCancellationRequested();
+
+            if (suggestions.Count == 0)
+            {
+                StatusText = "Aucun pattern supplémentaire détecté (liste actuelle déjà couverte).";
+                return;
+            }
+
+            PatternsText = MergeSuggestedPatterns(PatternsText, suggestions);
+            StatusText = $"{suggestions.Count} pattern(s) suggéré(s) ajoutés en fin de liste.";
+        }
+        catch (OperationCanceledException)
+        {
+            StatusText = "Analyse annulée.";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Erreur analyse : {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            IsProgressIndeterminate = false;
+            ProgressValue = 0;
+        }
+    }
+
+    internal static string MergeSuggestedPatterns(string current, IReadOnlyList<SuggestedPattern> suggestions)
+    {
+        var existing = ParsePatterns(current).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var toAdd = suggestions
+            .Where(s => !existing.Contains(s.Pattern))
+            .ToList();
+
+        if (toAdd.Count == 0)
+            return current;
+
+        var sb = new StringBuilder(current.TrimEnd());
+        sb.AppendLine();
+        sb.AppendLine();
+        sb.AppendLine($"# Suggérés depuis tes clips ({DateTime.Now:yyyy-MM-dd})");
+        foreach (var suggestion in toAdd)
+            sb.AppendLine(suggestion.Pattern);
+
+        return sb.ToString();
     }
 
     private async Task LoadThumbnailsAsync(CancellationToken token)

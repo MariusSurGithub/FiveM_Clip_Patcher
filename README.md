@@ -22,6 +22,18 @@ Dossier par défaut : `%LOCALAPPDATA%\Rockstar Games\GTA V\videos\clips`
 
 Exact (`17mov_foo`) cherche une substring dans tout le binaire. Wildcard (`17mov_*`) ne matche qu'un nom de ressource isolé (run ASCII entière).
 
+## Patterns par défaut
+
+Trois catégories sont préchargées dans l'onglet **Patterns** :
+
+1. **Mods courants** — liste du [README WaydeTheKiwi](https://github.com/WaydeTheKiwi/FiveM_Clip_Patcher) (`17mov_*`, `scully_*`, `*_emotemenu`, `bzzz_*`, `pprp_*`, …)
+2. **Crashs documentés** — ressources citées dans les rapports publics build 3258 / GitHub (`griz_cayo_restaurant`, `amb-roxwood-interiors`, `prompt_vfd_4bays`)
+3. **Créateurs MLO** — wildcards fréquents sur serveurs avec assets escrow (`prompt_*`, `gabz_*`, `kiiya_*`, `k4mb1_*`, `molo_*`)
+
+Le crash dépend surtout des ressources **de ton serveur**. Utilise **Détecter** pour analyser tes `.clip` et ajouter automatiquement les noms de ressources les plus fréquents (section `# Suggérés depuis tes clips`).
+
+Pour un crash persistant, ouvre le log FiveM et cherche `during loading of <nom_ressource>` — ajoute ce nom en pattern **exact**.
+
 ## Build
 
 ```bat
